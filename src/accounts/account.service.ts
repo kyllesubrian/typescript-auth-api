@@ -8,12 +8,24 @@ import { Role } from '../_helpers/role';
 import { sendEmail } from '../_helpers/send-email';
 
 export const accountService = {
-    getAll, getById, create, update, delete: _delete,
-    register, verifyEmail, authenticate, refreshToken, revokeToken,
-    forgotPassword, resetPassword
+    getAll,
+    getById,
+    create,
+    update,
+    delete: _delete,
+    register,
+    verifyEmail,
+    authenticate,
+    refreshToken,
+    revokeToken,
+    forgotPassword,
+    resetPassword,
+    validateResetToken
 };
 
-async function getAll() { return await db.Account.findAll(); }
+async function getAll() {
+    return await db.Account.findAll();
+}
 
 async function getById(id: number) {
     const account = await db.Account.findByPk(id);
@@ -37,7 +49,9 @@ async function update(id: number, params: any) {
             throw `Email "${params.email}" is already taken`;
         }
     }
-    if (params.password) params.passwordHash = await bcrypt.hash(params.password, 10);
+    if (params.password) {
+        params.passwordHash = await bcrypt.hash(params.password, 10);
+    }
     Object.assign(account, params);
     await account.save();
 }
@@ -127,6 +141,14 @@ async function resetPassword({ token, password }: { token: string; password: str
     await account.save();
 }
 
+async function validateResetToken({ token }: { token: string }) {
+    const account = await db.Account.findOne({
+        where: { resetToken: token, resetTokenExpires: { [Op.gt]: new Date() } }
+    });
+    if (!account) throw 'Invalid or expired token';
+    return account;
+}
+
 async function getRefreshToken(token: string) {
     const refreshToken = await db.RefreshToken.findOne({ where: { token } });
     if (!refreshToken || !refreshToken.isActive) throw 'Invalid token';
@@ -147,13 +169,13 @@ function generateRefreshToken(account: any, ipAddress: string) {
 }
 
 async function sendVerificationEmail(account: any, origin: string) {
-    const verifyUrl = `http://localhost:4000/account/verify-email?token=${account.verificationToken}`;
+    const verifyUrl = `${origin}/account/verify-email?token=${account.verificationToken}`;
     const html = `<p>Please click the link below to verify your email address:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`;
     await sendEmail(account.email, 'Verify Email', html);
 }
 
 async function sendPasswordResetEmail(account: any, origin: string) {
-    const resetUrl = `http://localhost:4000/account/reset-password?token=${account.resetToken}`;
+    const resetUrl = `${origin}/account/reset-password?token=${account.resetToken}`;
     const html = `<p>Please click the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`;
     await sendEmail(account.email, 'Reset Password', html);
 }

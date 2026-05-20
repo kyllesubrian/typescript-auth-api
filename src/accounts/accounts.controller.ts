@@ -15,18 +15,18 @@ router.post('/refresh-token', refreshToken);
 router.post('/revoke-token', revokeTokenSchema, revokeToken);
 router.post('/forgot-password', forgotPasswordSchema, forgotPassword);
 router.post('/reset-password', resetPasswordSchema, resetPassword);
+router.post('/validate-reset-token', validateResetTokenSchema, validateResetToken);
 router.get('/', authorize([Role.Admin]), getAll);
-router.get('/:id', authorize([]), getById);
-router.put('/:id', authorize([]), updateSchema, update);
-router.delete('/:id', authorize([]), _delete);
+router.get('/:id', authorize(), getById);
+router.post('/', authorize([Role.Admin]), createSchema, create);
+router.put('/:id', authorize(), updateSchema, update);
+router.delete('/:id', authorize(), _delete);
 
 export default router;
 
-// ==================== ROUTE HANDLERS ====================
-
 function register(req: Request, res: Response, next: NextFunction) {
     accountService.register(req.body, req.ip)
-        .then(() => res.json({ message: 'Registration successful, please check your email' }))
+        .then(() => res.json({ message: 'Registration successful, please check your email for verification instructions' }))
         .catch(next);
 }
 
@@ -38,9 +38,9 @@ function verifyEmail(req: Request, res: Response, next: NextFunction) {
 
 function authenticate(req: Request, res: Response, next: NextFunction) {
     accountService.authenticate({ ...req.body, ipAddress: req.ip })
-        .then((result: any) => {
-            setTokenCookie(res, result.refreshToken);
-            res.json({ account: result.account, jwtToken: result.jwtToken });
+        .then(({ account, jwtToken, refreshToken }) => {
+            setTokenCookie(res, refreshToken);
+            res.json({ account, jwtToken });
         })
         .catch(next);
 }
@@ -48,20 +48,15 @@ function authenticate(req: Request, res: Response, next: NextFunction) {
 function refreshToken(req: Request, res: Response, next: NextFunction) {
     const token = req.body.refreshToken || req.cookies?.refreshToken;
     accountService.refreshToken({ token, ipAddress: req.ip })
-        .then((result: any) => {
-            setTokenCookie(res, result.refreshToken);
-            res.json({ account: result.account, jwtToken: result.jwtToken });
+        .then(({ account, jwtToken, refreshToken }) => {
+            setTokenCookie(res, refreshToken);
+            res.json({ account, jwtToken });
         })
         .catch(next);
 }
 
 function revokeToken(req: Request, res: Response, next: NextFunction) {
-    const token = req.body.token || req.body.refreshToken;
-    
-    if (!token) {
-        return res.status(400).json({ message: 'Token is required' });
-    }
-    
+    const token = req.body.token || req.cookies?.refreshToken;
     accountService.revokeToken({ token, ipAddress: req.ip })
         .then(() => res.json({ message: 'Token revoked' }))
         .catch(next);
@@ -79,15 +74,27 @@ function resetPassword(req: Request, res: Response, next: NextFunction) {
         .catch(next);
 }
 
+function validateResetToken(req: Request, res: Response, next: NextFunction) {
+    accountService.validateResetToken(req.body)
+        .then(() => res.json({ message: 'Token is valid' }))
+        .catch(next);
+}
+
 function getAll(req: Request, res: Response, next: NextFunction) {
     accountService.getAll()
-        .then((accounts: any) => res.json(accounts))
+        .then(accounts => res.json(accounts))
         .catch(next);
 }
 
 function getById(req: Request, res: Response, next: NextFunction) {
     accountService.getById(parseInt(req.params.id))
-        .then((account: any) => res.json(account))
+        .then(account => res.json(account))
+        .catch(next);
+}
+
+function create(req: Request, res: Response, next: NextFunction) {
+    accountService.create(req.body)
+        .then(() => res.json({ message: 'Account created' }))
         .catch(next);
 }
 
@@ -104,13 +111,12 @@ function _delete(req: Request, res: Response, next: NextFunction) {
 }
 
 function setTokenCookie(res: Response, token: string) {
-    res.cookie('refreshToken', token, { 
-        httpOnly: true, 
-        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) 
-    });
+    const cookieOptions = {
+        httpOnly: true,
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    };
+    res.cookie('refreshToken', token, cookieOptions);
 }
-
-// ==================== VALIDATION SCHEMAS ====================
 
 function registerSchema(req: Request, res: Response, next: NextFunction) {
     const schema = Joi.object({
@@ -120,6 +126,7 @@ function registerSchema(req: Request, res: Response, next: NextFunction) {
         email: Joi.string().email().required(),
         password: Joi.string().min(6).required(),
         confirmPassword: Joi.string().valid(Joi.ref('password')).required(),
+        acceptTerms: Joi.boolean()
     });
     validateRequest(req, next, schema);
 }
@@ -138,10 +145,7 @@ function authenticateSchema(req: Request, res: Response, next: NextFunction) {
 }
 
 function revokeTokenSchema(req: Request, res: Response, next: NextFunction) {
-    const schema = Joi.object({ 
-        token: Joi.string().required(),
-        refreshToken: Joi.string()
-    });
+    const schema = Joi.object({ token: Joi.string() });
     validateRequest(req, next, schema);
 }
 
@@ -159,6 +163,24 @@ function resetPasswordSchema(req: Request, res: Response, next: NextFunction) {
     validateRequest(req, next, schema);
 }
 
+function validateResetTokenSchema(req: Request, res: Response, next: NextFunction) {
+    const schema = Joi.object({ token: Joi.string().required() });
+    validateRequest(req, next, schema);
+}
+
+function createSchema(req: Request, res: Response, next: NextFunction) {
+    const schema = Joi.object({
+        title: Joi.string().required(),
+        firstName: Joi.string().required(),
+        lastName: Joi.string().required(),
+        email: Joi.string().email().required(),
+        password: Joi.string().min(6).required(),
+        role: Joi.string().valid(Role.Admin, Role.User).default(Role.User),
+        isVerified: Joi.boolean().default(false),
+    });
+    validateRequest(req, next, schema);
+}
+
 function updateSchema(req: Request, res: Response, next: NextFunction) {
     const schema = Joi.object({
         title: Joi.string().empty(''),
@@ -167,6 +189,8 @@ function updateSchema(req: Request, res: Response, next: NextFunction) {
         email: Joi.string().email().empty(''),
         password: Joi.string().min(6).empty(''),
         confirmPassword: Joi.string().valid(Joi.ref('password')).empty(''),
+        role: Joi.string().valid(Role.Admin, Role.User).empty(''),
+        isVerified: Joi.boolean(),
     }).with('password', 'confirmPassword');
     validateRequest(req, next, schema);
 }
