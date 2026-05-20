@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import config from '../../config.json';
 import { db } from '../_helpers/db';
 
 export function authorize(roles: string[] = []) {
@@ -14,7 +13,8 @@ export function authorize(roles: string[] = []) {
             }
 
             try {
-                const decoded: any = jwt.verify(token, config.jwtSecret);
+                const secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+                const decoded: any = jwt.verify(token, secret);
                 req.user = decoded;
                 next();
             } catch (err) {

@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authorize = authorize;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const config_json_1 = __importDefault(require("../../config.json"));
 const db_1 = require("../_helpers/db");
 function authorize(roles = []) {
     return [
@@ -16,7 +15,8 @@ function authorize(roles = []) {
                 return res.status(401).json({ message: 'No token provided' });
             }
             try {
-                const decoded = jsonwebtoken_1.default.verify(token, config_json_1.default.jwtSecret);
+                const secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+                const decoded = jsonwebtoken_1.default.verify(token, secret);
                 req.user = decoded;
                 next();
             }

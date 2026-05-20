@@ -38,20 +38,30 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.db = void 0;
 exports.initialize = initialize;
-const config_json_1 = __importDefault(require("../../config.json"));
 const promise_1 = __importDefault(require("mysql2/promise"));
 const sequelize_1 = require("sequelize");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 exports.db = {};
 async function initialize() {
-    const { host, port, user, password, database } = config_json_1.default.database;
-    // SSL configuration for Aiven
+    const host = process.env.DB_HOST;
+    const port = parseInt(process.env.DB_PORT || '3306');
+    const user = process.env.DB_USER;
+    const password = process.env.DB_PASSWORD;
+    const database = process.env.DB_NAME;
     const sslConfig = {
-        ca: fs_1.default.readFileSync(path_1.default.join(__dirname, '../../ca.pem')),
         rejectUnauthorized: true
     };
-    // Test connection first
+    // Use CA cert from env variable or file
+    if (process.env.DB_CA_CERT) {
+        sslConfig.ca = process.env.DB_CA_CERT;
+    }
+    else {
+        const caPath = path_1.default.join(__dirname, '../../ca.pem');
+        if (fs_1.default.existsSync(caPath)) {
+            sslConfig.ca = fs_1.default.readFileSync(caPath);
+        }
+    }
     const connection = await promise_1.default.createConnection({
         host,
         port,
@@ -59,19 +69,17 @@ async function initialize() {
         password,
         ssl: sslConfig
     });
-    console.log('✅ Connected to Aiven MySQL');
+    console.log('Connected to Aiven MySQL');
     await connection.end();
-    // Connect with Sequelize
     const sequelize = new sequelize_1.Sequelize(database, user, password, {
         dialect: 'mysql',
-        host: host,
-        port: port,
+        host,
+        port,
         dialectOptions: {
             ssl: sslConfig
         },
         logging: false
     });
-    // Import models
     const { default: Account } = await Promise.resolve().then(() => __importStar(require('../accounts/account.model')));
     const { default: RefreshToken } = await Promise.resolve().then(() => __importStar(require('../accounts/refresh-token.model')));
     exports.db.Account = Account(sequelize);
@@ -79,5 +87,5 @@ async function initialize() {
     exports.db.Account.hasMany(exports.db.RefreshToken, { foreignKey: 'accountId', onDelete: 'CASCADE' });
     exports.db.RefreshToken.belongsTo(exports.db.Account, { foreignKey: 'accountId' });
     await sequelize.sync({ alter: true });
-    console.log('✅ Database tables synced');
+    console.log('Database tables synced');
 }
