@@ -25,7 +25,8 @@ router.delete('/:id', authorize(), _delete);
 export default router;
 
 function register(req: Request, res: Response, next: NextFunction) {
-    accountService.register(req.body, req.headers.origin as string)
+    const origin = req.headers.origin || 'https://angular-21-boilerplate-main.onrender.com';
+    accountService.register(req.body, origin)
         .then(() => res.json({ message: 'Registration successful, please check your email for verification instructions' }))
         .catch(next);
 }
@@ -63,7 +64,8 @@ function revokeToken(req: Request, res: Response, next: NextFunction) {
 }
 
 function forgotPassword(req: Request, res: Response, next: NextFunction) {
-    accountService.forgotPassword({ ...req.body, origin: req.headers.origin })
+    const origin = req.headers.origin || 'https://angular-21-boilerplate-main.onrender.com';
+    accountService.forgotPassword({ ...req.body, origin })
         .then(() => res.json({ message: 'Please check your email for password reset instructions' }))
         .catch(next);
 }
@@ -113,6 +115,8 @@ function _delete(req: Request, res: Response, next: NextFunction) {
 function setTokenCookie(res: Response, token: string) {
     const cookieOptions = {
         httpOnly: true,
+        secure: true,
+        sameSite: 'none' as const,
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     };
     res.cookie('refreshToken', token, cookieOptions);
