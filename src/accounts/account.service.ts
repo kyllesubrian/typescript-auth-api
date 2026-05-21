@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { Op } from 'sequelize';
-import config from '../../config.json';
 import { db } from '../_helpers/db';
 import { Role } from '../_helpers/role';
 import { sendEmail } from '../_helpers/send-email';
@@ -109,16 +108,12 @@ async function refreshToken({ token, ipAddress }: { token: string; ipAddress: st
 
 async function revokeToken({ token, ipAddress }: { token: string; ipAddress: string }) {
     if (!token) throw 'Token is required';
-    
     const refreshToken = await db.RefreshToken.findOne({ where: { token } });
     if (!refreshToken) throw 'Invalid token';
-    
     if (refreshToken.revoked) throw 'Token already revoked';
-    
     refreshToken.revoked = new Date();
     refreshToken.revokedByIp = ipAddress;
     await refreshToken.save();
-    
     return { message: 'Token revoked' };
 }
 
@@ -156,7 +151,8 @@ async function getRefreshToken(token: string) {
 }
 
 function generateJwtToken(account: any) {
-    return jwt.sign({ id: account.id, role: account.role }, config.jwtSecret, { expiresIn: '15m' });
+    const secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
+    return jwt.sign({ id: account.id, role: account.role }, secret, { expiresIn: '15m' });
 }
 
 function generateRefreshToken(account: any, ipAddress: string) {
@@ -170,12 +166,21 @@ function generateRefreshToken(account: any, ipAddress: string) {
 
 async function sendVerificationEmail(account: any, origin: string) {
     const verifyUrl = `${origin}/account/verify-email?token=${account.verificationToken}`;
-    const html = `<p>Please click the link below to verify your email address:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p>`;
+    const html = `
+        <h4>Verify Email</h4>
+        <p>Thanks for registering!</p>
+        <p>Please click the link below to verify your email address:</p>
+        <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+    `;
     await sendEmail(account.email, 'Verify Email', html);
 }
 
 async function sendPasswordResetEmail(account: any, origin: string) {
     const resetUrl = `${origin}/account/reset-password?token=${account.resetToken}`;
-    const html = `<p>Please click the link below to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`;
+    const html = `
+        <h4>Reset Password</h4>
+        <p>Please click the link below to reset your password:</p>
+        <p><a href="${resetUrl}">${resetUrl}</a></p>
+    `;
     await sendEmail(account.email, 'Reset Password', html);
 }
