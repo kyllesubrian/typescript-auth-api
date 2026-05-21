@@ -6,15 +6,6 @@
     "version": "1.0.0"
   },
   "servers": [
-    "servers": [
-  {
-  "openapi": "3.0.0",
-  "info": {
-    "title": "Node.js Sign-up and Verification API",
-    "description": "Node.js + MySQL API with email sign-up, verification, authentication and forgot password",
-    "version": "1.0.0"
-  },
-  "servers": [
     {
       "url": "https://typescript-auth-api-u4dc.onrender.com",
       "description": "Production server"
@@ -24,7 +15,6 @@
       "description": "Local development server"
     }
   ],
-  "paths": {
   "paths": {
     "/accounts/authenticate": {
       "post": {
