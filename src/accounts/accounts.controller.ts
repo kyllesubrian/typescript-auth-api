@@ -25,7 +25,7 @@ router.delete('/:id', authorize(), _delete);
 export default router;
 
 function register(req: Request, res: Response, next: NextFunction) {
-    accountService.register(req.body, req.ip)
+    accountService.register(req.body, req.headers.origin as string)
         .then(() => res.json({ message: 'Registration successful, please check your email for verification instructions' }))
         .catch(next);
 }
