@@ -1,53 +1,40 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { errorHandler } from './_middleware/error-handler';
-import { initialize } from './_helpers/db';
+import errorHandler from './_middleware/error-handler';
+import db, { initialize } from './_helpers/db';
 import accountsController from './accounts/accounts.controller';
-import { swaggerServe, swaggerRouter } from './_helpers/swagger';
+import swaggerRouter from './_helpers/swagger';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app: Application = express();
+const PORT = process.env.PORT || 4000;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-const allowedOrigins = [
-    'http://localhost:4200',
-    'https://angular-21-boilerplate-main.onrender.com'
-];
-
-console.log('Allowed CORS origins:', allowedOrigins);
-
+const corsOrigin = process.env.CORS_ORIGIN;
 app.use(cors({
-    origin: (origin, callback) => {
-        console.log('Request origin:', origin);
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            console.log('CORS blocked origin:', origin);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: process.env.NODE_ENV === 'production'
+        ? (corsOrigin ? corsOrigin.split(',').map(x => x.trim()) : false)
+        : (origin: any, callback: any) => callback(null, true),
     credentials: true
 }));
 
-app.use(cookieParser());
-
 app.use('/accounts', accountsController);
-app.use('/api-docs', swaggerServe, swaggerRouter);
-
+app.use('/api-docs', swaggerRouter);
 app.use(errorHandler);
-
-const PORT = process.env.PORT || 4000;
 
 initialize()
     .then(() => {
         app.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-            console.log(`✅ Allowed origins: ${allowedOrigins.join(', ')}`);
+            console.log(`Server running on http://localhost:${PORT}`);
+            console.log(`Swagger docs available at http://localhost:${PORT}/api-docs`);
         });
     })
-    .catch((err) => {
-        console.error('❌ Failed to initialize database:', err);
+    .catch((err: any) => {
+        console.error('Failed to initialize database:', err);
         process.exit(1);
     });

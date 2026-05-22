@@ -1,6 +1,4 @@
-export const Role = {
+export default {
     Admin: 'Admin',
     User: 'User'
-} as const;
-
-export type RoleType = typeof Role[keyof typeof Role];
+}

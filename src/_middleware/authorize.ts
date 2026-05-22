@@ -1,42 +1,29 @@
-import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-import { db } from '../_helpers/db';
+import jwt from 'express-jwt';
+import db from '../_helpers/db';
 
-export function authorize(roles: string[] = []) {
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required in production');
+}
+
+const jwtSecret = process.env.JWT_SECRET || 'your-fallback-secret-key';
+
+export default function authorize(roles: any = []) {
+    if (typeof roles === 'string') {
+        roles = [roles];
+    }
+
     return [
-        async (req: any, res: Response, next: NextFunction) => {
-            const authHeader = req.headers.authorization;
-            const token = authHeader && authHeader.split(' ')[1];
-
-            if (!token) {
-                return res.status(401).json({ message: 'No token provided' });
-            }
-
-            try {
-                const secret = process.env.JWT_SECRET || 'your-super-secret-jwt-key';
-                const decoded: any = jwt.verify(token, secret);
-                req.user = decoded;
-                next();
-            } catch (err) {
-                return res.status(401).json({ message: 'Invalid token' });
-            }
-        },
-        async (req: any, res: Response, next: NextFunction) => {
+        jwt({ secret: jwtSecret, algorithms: ['HS256'] }),
+        async (req: any, res: any, next: any) => {
             const account = await db.Account.findByPk(req.user.id);
 
-            if (!account) {
-                return res.status(401).json({ message: 'Account not found' });
-            }
-
-            const isAuthorized = roles.length === 0 || roles.includes(account.role);
-
-            if (!isAuthorized) {
+            if (!account || (roles.length && !roles.includes(account.role))) {
                 return res.status(401).json({ message: 'Unauthorized' });
             }
 
             req.user.role = account.role;
-            req.user.ownsToken = (tokenId: number) => tokenId === req.user.tokenId;
-
+            const refreshTokens = await account.getRefreshTokens();
+            req.user.ownsToken = (token: any) => !!refreshTokens.find((x: any) => x.token === token);
             next();
         }
     ];
